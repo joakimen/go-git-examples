@@ -1,32 +1,22 @@
 package git
 
 import (
-	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
-// Repo represents a git repo
-type Repo struct {
-	Path string
-}
-
-// PullResult is the result of a fetch & merge.
-type PullResult struct {
-	Repo    string
-	Commits []string
-}
-
-// New returns a new repo-instance
-func New(path string) (Repo, error) {
+// IsValidRepo returns a new repo-instance
+func IsValidRepo(path string) bool {
 
 	// testing if path is a valid git +epository
 	if RevParse(path, "@") == "" {
-		err := errors.New(path + " is not a valid git repo")
-		return Repo{}, err
+		return false
 	}
 
-	return Repo{Path: path}, nil
+	return true
 }
 
 // RevParse attempts to get the revision hash of the specified path
@@ -41,50 +31,71 @@ func RevParse(path, rev string) string {
 }
 
 // Merge merges changes from origin
-func (r *Repo) Merge() error {
-	cmd := exec.Command("git", "-C", r.Path, "merge", "--quiet")
-	return cmd.Run() // returns error obj
+func Merge(repo string) error {
+	cmd := exec.Command("git", "-C", repo, "merge", "--quiet")
+	out, err := cmd.Output()
+
+	fmt.Println(string(out))
+
+	if err != nil {
+		fmt.Println("merge failed")
+		return err
+	}
+
+	fmt.Println("succeeded")
+	return nil
 }
 
 // Fetch fetches changes from origin
-func (r *Repo) Fetch() (string, error) {
-	cmd := exec.Command("git", "-C", r.Path, "fetch")
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+func Fetch(repo string) error {
+	cmd := exec.Command("git", "-C", repo, "fetch")
+	err := cmd.Run()
+	return err
 }
 
 // Log returns unmerged commits
-func (r *Repo) Log() (string, error) {
-	cmd := exec.Command("git", "-C", r.Path, "log", "..origin", "--pretty=format:%h - %s (%an, %ar)")
+func Log(repo string, revisionRange string) (commits []string, err error) {
+	cmd := exec.Command("git", "-C", repo, "log", revisionRange, "--pretty=format:%h - %s (%an, %ar)")
 	out, err := cmd.Output()
-	return string(out), err
+	if err != nil {
+		return commits, err
+	}
+
+	// populate commits from log
+	for _, c := range strings.Split(string(out), "\n") {
+		commits = append(commits, c)
+	}
+	return commits, err
 }
 
 // Pull fetches and merges changes
-func (r *Repo) Pull() PullResult {
+func Pull(repo string) ([]string, error) {
 
-	res := PullResult{Repo: r.Path}
+	var commits []string
 
 	// fetch remote
-	r.Fetch()
+	err := Fetch(repo)
+	if err != nil {
+		return commits, errors.Wrap(err, "git fetch")
+	}
 
 	// compare local and remote to check for changes
-	local := RevParse(r.Path, "@")
-	remote := RevParse(r.Path, "origin/master")
+	local := RevParse(repo, "@")
+	remote := RevParse(repo, "origin/master")
 
 	// are there any changes?
 	if local != remote {
 
 		// save new commit-messages in result object
-		commits, _ := r.Log()
-		for _, c := range strings.Split(commits, "\n") {
-			res.Commits = append(res.Commits, c)
+		commits, err = Log(repo, "@..origin")
+		if err != nil {
+			return commits, errors.Wrap(err, "git log")
 		}
 
 		// merge them
-		r.Merge()
+		Merge(repo)
 
 	}
 
-	return res
+	return commits, nil
 }
