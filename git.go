@@ -1,7 +1,6 @@
 package git
 
 import (
-	"fmt"
 	"os/exec"
 	"strings"
 
@@ -15,7 +14,6 @@ func IsValidRepo(path string) bool {
 	if RevParse(path, "@") == "" {
 		return false
 	}
-
 	return true
 }
 
@@ -33,24 +31,13 @@ func RevParse(path, rev string) string {
 // Merge merges changes from origin
 func Merge(repo string) error {
 	cmd := exec.Command("git", "-C", repo, "merge", "--quiet")
-	out, err := cmd.Output()
-
-	fmt.Println(string(out))
-
-	if err != nil {
-		fmt.Println("merge failed")
-		return err
-	}
-
-	fmt.Println("succeeded")
-	return nil
+	return cmd.Run()
 }
 
 // Fetch fetches changes from origin
 func Fetch(repo string) error {
 	cmd := exec.Command("git", "-C", repo, "fetch")
-	err := cmd.Run()
-	return err
+	return cmd.Run()
 }
 
 // Log returns unmerged commits
@@ -93,8 +80,10 @@ func Pull(repo string) ([]string, error) {
 		}
 
 		// merge them
-		Merge(repo)
-
+		err = Merge(repo)
+		if err != nil {
+			return commits, errors.Wrap(err, "git merge")
+		}
 	}
 
 	return commits, nil
