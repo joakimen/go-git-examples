@@ -1,3 +1,3 @@
-# git
+# go-git-examples
 
-asdf
+Wrapping some basic git-operations in Go
